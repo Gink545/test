@@ -34,8 +34,8 @@ Page({
       await new Promise((resolve, reject) => {
         wx.requestPayment({ ...data.payParams, success: resolve, fail: reject })
       })
-      await request({ url: `/api/member/recharge/${data.rechargeId}/paid`, method: 'POST' })
-      wx.showToast({ title: '充值成功' })
+      // 余额到账以微信回调为准，前端不再直改 paid 状态
+      wx.showToast({ title: '支付发起成功，请稍后刷新余额' })
       this.loadProfile()
     } catch (e) {
       wx.showToast({ title: e.errMsg || e.message || '充值失败', icon: 'none' })

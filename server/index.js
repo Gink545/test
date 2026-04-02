@@ -6,6 +6,8 @@ const { createJsapiPay } = require('./wechatPay')
 const { createStore } = require('./store')
 const { code2Session } = require('./wechatAuth')
 const { decryptResource } = require('./wechatNotify')
+const { signToken, verifyToken } = require('./authToken')
+const { verifyWechatPaySignature } = require('./wechatVerify')
 
 const app = express()
 app.use(cors())
@@ -30,16 +32,25 @@ async function getOrCreateUserByOpenid(openid) {
 
 app.use(async (req, res, next) => {
   if (req.path === '/api/auth/login' || req.path === '/api/health') return next()
-  const userId = req.header('X-User-Id')
-  if (!userId) return fail(res, '缺少 X-User-Id', 40101, 401)
-  const user = await store.getUserById(userId)
-  if (!user) return fail(res, '用户不存在，请重新登录', 40102, 401)
-  req.user = user
-  next()
+
+  const auth = req.header('Authorization') || ''
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
+  if (!token) return fail(res, '缺少 Bearer Token', 40101, 401)
+
+  try {
+    const payload = verifyToken(token, config.jwtSecret)
+    const user = await store.getUserById(payload.userId)
+    if (!user) return fail(res, '用户不存在，请重新登录', 40102, 401)
+    req.user = user
+    req.auth = payload
+    next()
+  } catch (e) {
+    return fail(res, e.message || 'token无效', 40103, 401)
+  }
 })
 
 app.get('/api/health', (req, res) => {
-  ok(res, { now: Date.now(), payMode: config.payMode, storage: config.storage })
+  ok(res, { now: Date.now(), payMode: config.payMode, storage: config.storage, env: config.nodeEnv })
 })
 
 app.post('/api/auth/login', async (req, res) => {
@@ -49,7 +60,9 @@ app.post('/api/auth/login', async (req, res) => {
 
     const session = await code2Session(code)
     const user = await getOrCreateUserByOpenid(session.openid)
-    ok(res, { userId: user.id, openid: user.openid, unionid: session.unionid || '' })
+    const token = signToken({ userId: user.id, openid: user.openid }, config.jwtSecret)
+
+    ok(res, { userId: user.id, openid: user.openid, unionid: session.unionid || '', token })
   } catch (e) {
     fail(res, e.message || '登录失败', 50003, 500)
   }
@@ -101,6 +114,8 @@ app.post('/api/orders', async (req, res) => {
       if (Number(item.quantity) > dish.stock) return fail(res, `${dish.name} 库存不足`)
       normalized.push({ id: dish.id, name: dish.name, price: Number(dish.price), quantity: Number(item.quantity) })
     }
+
+    await store.reserveStock(normalized)
 
     const amount = normalized.reduce((s, i) => s + i.price * i.quantity, 0)
     const orderId = uuidv4()
@@ -156,14 +171,26 @@ app.post('/api/orders/:id/cancel', async (req, res) => {
   ok(res)
 })
 
-app.post('/api/orders/:id/paid', async (req, res) => {
-  const order = await store.getOrderById(req.params.id)
-  if (!order || order.userId !== req.user.id) return fail(res, '订单不存在', 40401, 404)
-  if (order.status !== 'PAID') {
-    await store.updateOrder(order.id, { status: 'PAID', paidAt: Date.now() })
-  }
-  ok(res)
-})
+if (config.enableDebugPaidApi) {
+  app.post('/api/orders/:id/paid', async (req, res) => {
+    const order = await store.getOrderById(req.params.id)
+    if (!order || order.userId !== req.user.id) return fail(res, '订单不存在', 40401, 404)
+    if (order.status !== 'PAID') {
+      await store.updateOrder(order.id, { status: 'PAID', paidAt: Date.now() })
+    }
+    ok(res)
+  })
+
+  app.post('/api/member/recharge/:id/paid', async (req, res) => {
+    const recharge = await store.getRechargeById(req.params.id)
+    if (!recharge || recharge.userId !== req.user.id) return fail(res, '充值记录不存在', 40402, 404)
+    if (recharge.status !== 'PAID') {
+      await store.updateRecharge(recharge.id, { status: 'PAID', paidAt: Date.now() })
+      await store.addBalance(req.user.id, recharge.amount)
+    }
+    ok(res)
+  })
+}
 
 app.get('/api/member/profile', async (req, res) => {
   const user = await store.getUserById(req.user.id)
@@ -203,22 +230,17 @@ app.get('/api/member/recharges', async (req, res) => {
   ok(res, { list: list.map(r => ({ ...r, amount: Number(r.amount.toFixed(2)) })) })
 })
 
-app.post('/api/member/recharge/:id/paid', async (req, res) => {
-  const recharge = await store.getRechargeById(req.params.id)
-  if (!recharge || recharge.userId !== req.user.id) return fail(res, '充值记录不存在', 40402, 404)
-  if (recharge.status !== 'PAID') {
-    await store.updateRecharge(recharge.id, { status: 'PAID', paidAt: Date.now() })
-    await store.addBalance(req.user.id, recharge.amount)
-  }
-  ok(res)
-})
-
 app.post('/api/pay/notify', async (req, res) => {
   try {
+    if (config.payMode === 'wechat_v3') {
+      const signOk = verifyWechatPaySignature(req, config.wx.platformCertPath)
+      if (!signOk) return res.status(401).json({ code: 'FAIL', message: '回调签名校验失败' })
+    }
+
     let outTradeNo = req.body?.out_trade_no
     let tradeState = req.body?.trade_state
+    const transactionId = req.body?.transaction_id || req.body?.id || `txn_${Date.now()}`
 
-    // 微信支付V3回调结构：{resource:{ciphertext,nonce,associated_data,...}}
     if (!outTradeNo && req.body?.resource) {
       const plain = decryptResource(req.body.resource)
       outTradeNo = plain.out_trade_no
@@ -226,6 +248,9 @@ app.post('/api/pay/notify', async (req, res) => {
     }
 
     if (!outTradeNo) return fail(res, '缺少 out_trade_no')
+
+    const firstSeen = await store.recordPaymentEvent(transactionId, outTradeNo)
+    if (!firstSeen) return res.status(200).json({ code: 'SUCCESS', message: '重复通知忽略' })
 
     if (tradeState === 'SUCCESS') {
       const order = await store.getOrderById(outTradeNo)
@@ -247,9 +272,13 @@ app.post('/api/pay/notify', async (req, res) => {
 })
 
 async function bootstrap() {
+  if (config.nodeEnv === 'production' && config.jwtSecret === 'change_me_in_production') {
+    throw new Error('生产环境必须设置 JWT_SECRET')
+  }
+
   store = await createStore()
   app.listen(config.port, () => {
-    console.log(`server running on http://localhost:${config.port}, payMode=${config.payMode}, storage=${config.storage}`)
+    console.log(`server running on http://localhost:${config.port}, payMode=${config.payMode}, storage=${config.storage}, env=${config.nodeEnv}`)
   })
 }
 

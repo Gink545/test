@@ -13,6 +13,7 @@ class MemoryStore {
     this.carts = {}
     this.orders = []
     this.recharges = []
+    this.paymentEvents = new Set()
   }
   async init() {}
   async getDishes() { return dishes.filter(d => d.status === 'ON') }
@@ -44,6 +45,23 @@ class MemoryStore {
     const u = this.users.find(x => x.id === userId)
     if (u) u.balance += amount
     return u
+  }
+
+  async reserveStock(items) {
+    for (const i of items) {
+      const d = dishes.find(x => x.id === i.id)
+      if (!d || d.status !== 'ON') throw new Error(`菜品不可下单: ${i.id}`)
+      if (d.stock < i.quantity) throw new Error(`${d.name} 库存不足`)
+    }
+    for (const i of items) {
+      const d = dishes.find(x => x.id === i.id)
+      d.stock -= i.quantity
+    }
+  }
+  async recordPaymentEvent(transactionId) {
+    if (this.paymentEvents.has(transactionId)) return false
+    this.paymentEvents.add(transactionId)
+    return true
   }
 }
 
@@ -115,6 +133,16 @@ class MysqlStore {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `)
 
+
+
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS payment_events (
+        id BIGINT PRIMARY KEY AUTO_INCREMENT,
+        transaction_id VARCHAR(128) NOT NULL UNIQUE,
+        out_trade_no VARCHAR(64) NOT NULL,
+        created_at BIGINT NOT NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `)
     for (const d of dishes) {
       await this.pool.query(
         `INSERT INTO dishes (id,name,price,stock,status) VALUES (?,?,?,?,?)
@@ -237,6 +265,34 @@ class MysqlStore {
   async addBalance(userId, amount) {
     await this.pool.query(`UPDATE users SET balance = balance + ? WHERE id=?`, [amount, userId])
     return this.getUserById(userId)
+  }
+  async reserveStock(items) {
+    const conn = await this.pool.getConnection()
+    try {
+      await conn.beginTransaction()
+      for (const i of items) {
+        const [ret] = await conn.query(
+          `UPDATE dishes SET stock = stock - ? WHERE id = ? AND status='ON' AND stock >= ?`,
+          [i.quantity, i.id, i.quantity]
+        )
+        if (ret.affectedRows !== 1) throw new Error(`库存扣减失败: ${i.id}`)
+      }
+      await conn.commit()
+    } catch (e) {
+      await conn.rollback(); throw e
+    } finally { conn.release() }
+  }
+  async recordPaymentEvent(transactionId, outTradeNo) {
+    try {
+      await this.pool.query(
+        `INSERT INTO payment_events (transaction_id,out_trade_no,created_at) VALUES (?,?,?)`,
+        [transactionId, outTradeNo, Date.now()]
+      )
+      return true
+    } catch (e) {
+      if (String(e.code) === 'ER_DUP_ENTRY') return false
+      throw e
+    }
   }
 }
 

@@ -45,7 +45,7 @@ Page({
         })
       })
 
-      await request({ url: `/api/orders/${order.orderId}/paid`, method: 'POST' })
+      // 订单状态以微信回调为准，前端不再直改 paid 状态
       clearCart()
       this.refresh()
       wx.showToast({ title: '支付成功' })

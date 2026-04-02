@@ -19,6 +19,9 @@ services:
       - mysql
     environment:
       PORT: 3000
+      NODE_ENV: production
+      JWT_SECRET: replace_me
+      ENABLE_DEBUG_PAID_API: "false"
       STORAGE: mysql
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
@@ -33,6 +36,7 @@ services:
       WX_PRIVATE_KEY_PATH: ""
       WX_NOTIFY_URL: ""
       WX_API_V3_KEY: ""
+      WX_PLATFORM_CERT_PATH: ""
     ports:
       - "3000:3000"
 

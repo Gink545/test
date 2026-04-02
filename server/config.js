@@ -2,6 +2,9 @@ const fs = require('fs')
 
 const config = {
   port: Number(process.env.PORT || 3000),
+  nodeEnv: process.env.NODE_ENV || 'development',
+  jwtSecret: process.env.JWT_SECRET || 'change_me_in_production',
+  enableDebugPaidApi: process.env.ENABLE_DEBUG_PAID_API === 'true',
   storage: process.env.STORAGE || 'memory', // memory | mysql
   mysql: {
     host: process.env.MYSQL_HOST || '127.0.0.1',
@@ -19,6 +22,7 @@ const config = {
     serialNo: process.env.WX_SERIAL_NO || '',
     notifyUrl: process.env.WX_NOTIFY_URL || '',
     apiV3Key: process.env.WX_API_V3_KEY || '',
+    platformCertPath: process.env.WX_PLATFORM_CERT_PATH || '',
     privateKey: process.env.WX_PRIVATE_KEY_PATH
       ? fs.readFileSync(process.env.WX_PRIVATE_KEY_PATH, 'utf8')
       : ''

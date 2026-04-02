@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "node index.js",
     "start": "NODE_ENV=production node index.js",
-    "check": "node --check index.js && node --check store.js && node --check wechatPay.js && node --check wechatAuth.js && node --check wechatNotify.js"
+    "check": "node --check index.js && node --check store.js && node --check wechatPay.js && node --check wechatAuth.js && node --check wechatNotify.js && node --check authToken.js && node --check wechatVerify.js"
   },
   "dependencies": {
     "axios": "^1.7.7",

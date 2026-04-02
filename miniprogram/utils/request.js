@@ -8,8 +8,7 @@ function request({ url, method = 'GET', data = {} }, options = {}) {
       data,
       header: {
         'Content-Type': 'application/json',
-        Authorization: app.globalData.token || '',
-        'X-User-Id': options.noUser ? '' : (app.globalData.userId || '')
+        Authorization: options.noAuth ? '' : `Bearer ${app.globalData.token || ''}`
       },
       success: (res) => {
         if (!(res.statusCode >= 200 && res.statusCode < 300)) {
