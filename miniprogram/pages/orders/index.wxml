@@ -1,0 +1,9 @@
+<view>
+  <block wx:for="{{list}}" wx:key="id">
+    <view class="card">
+      <view>订单号：{{item.id}}</view>
+      <view style="margin-top:8rpx;">状态：{{item.status}}</view>
+      <view style="margin-top:8rpx;">金额：<text class="price">¥{{item.amount}}</text></view>
+    </view>
+  </block>
+</view>

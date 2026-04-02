@@ -1,0 +1,11 @@
+<view>
+  <block wx:for="{{dishes}}" wx:key="id">
+    <view class="card">
+      <view>{{item.name}}</view>
+      <view style="margin-top:12rpx;display:flex;justify-content:space-between;align-items:center;">
+        <text class="price">¥{{item.price}}</text>
+        <button size="mini" class="btn-primary" data-dish="{{item}}" bindtap="addDish">加入购物车</button>
+      </view>
+    </view>
+  </block>
+</view>

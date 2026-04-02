@@ -1,0 +1,23 @@
+{
+  "pages": [
+    "pages/menu/index",
+    "pages/cart/index",
+    "pages/member/index",
+    "pages/orders/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "微信点单",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTextStyle": "black"
+  },
+  "tabBar": {
+    "color": "#666666",
+    "selectedColor": "#07c160",
+    "list": [
+      { "pagePath": "pages/menu/index", "text": "点餐" },
+      { "pagePath": "pages/cart/index", "text": "购物车" },
+      { "pagePath": "pages/member/index", "text": "会员" },
+      { "pagePath": "pages/orders/index", "text": "订单" }
+    ]
+  }
+}
