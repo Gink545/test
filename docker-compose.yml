@@ -1,0 +1,44 @@
+version: '3.9'
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: wechat_order
+      MYSQL_USER: wechat
+      MYSQL_PASSWORD: wechat123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  api:
+    build:
+      context: ./server
+    depends_on:
+      - mysql
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      JWT_SECRET: replace_me
+      ENABLE_DEBUG_PAID_API: "false"
+      STORAGE: mysql
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: wechat
+      MYSQL_PASSWORD: wechat123
+      MYSQL_DATABASE: wechat_order
+      PAY_MODE: mock
+      WX_APPID: ""
+      WX_APP_SECRET: ""
+      WX_MCHID: ""
+      WX_SERIAL_NO: ""
+      WX_PRIVATE_KEY_PATH: ""
+      WX_NOTIFY_URL: ""
+      WX_API_V3_KEY: ""
+      WX_PLATFORM_CERT_PATH: ""
+    ports:
+      - "3000:3000"
+
+volumes:
+  mysql_data:

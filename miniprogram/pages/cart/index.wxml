@@ -1,0 +1,20 @@
+<view>
+  <block wx:for="{{cart}}" wx:key="id">
+    <view class="card">
+      <view>{{item.name}}</view>
+      <view style="display:flex;justify-content:space-between;align-items:center;margin-top:12rpx;">
+        <text class="price">¥{{item.price}}</text>
+        <view>
+          <button size="mini" data-id="{{item.id}}" data-quantity="{{item.quantity}}" bindtap="dec">-</button>
+          <text style="margin: 0 20rpx;">{{item.quantity}}</text>
+          <button size="mini" data-id="{{item.id}}" data-quantity="{{item.quantity}}" bindtap="inc">+</button>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view class="card">
+    <view>合计：<text class="price">¥{{total}}</text></view>
+    <button class="btn-primary" style="margin-top:16rpx;" bindtap="checkout">去支付并下单</button>
+  </view>
+</view>
